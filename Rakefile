@@ -3,6 +3,8 @@ require 'bundler/setup'
 Bundler.setup
 require 'xctasks/test_task'
 require 'rakeup'
+require 'nokogiri'
+require 'git'
 
 RakeUp::ServerTask.new do |t|
   t.port = 4567
@@ -93,14 +95,64 @@ end
 
 namespace :docs do
   task :generate => 'appledoc:check' do
-    command = apple_doc_command << " --no-create-docset --keep-intermediate-files --create-html `find Code/ -name '*.h'`"
+    command = apple_doc_command << " --no-create-docset --keep-intermediate-files --create-html `find ./Code -name '*.h'`"
     run(command, 1)
     puts "Generated HTML documentation at Docs/API/html"
   end
 
+  desc "Generate a docset from the current sources (but don't install)"
+  task :generate_docset, [:docset_name, :version] => ['appledoc:check'] do |t, args|
+    args.with_defaults(:docset_name => "RestKit", :version => File.read("VERSION").chomp)
+    docset_name = args[:docset_name]
+    version = args[:version]
+    puts "Generating RestKit ATOM feed docset for version #{version}..."
+    # ATOM URL: http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/org.restkit.RestKit.atom
+    command = apple_doc_command <<
+            " --keep-intermediate-files" <<
+            " --no-create-html" <<
+            " --no-install-docset" <<
+            " --docset-feed-name \"RestKit #{version} Documentation\"" <<
+            " --docset-feed-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETATOMFILENAME" <<
+            " --docset-package-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETPACKAGEFILENAME --publish-docset --verbose 3 `find ./Code -name '*.h'`"
+    run(command, 1)
+    puts "Packaging RestKit Dash feed docset for version #{version}..."
+    file_tgz = "#{docset_name}.tgz"
+    command = "COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -cvzf Docs/API/publish/#{file_tgz} -C Docs/API/docset ."
+    run(command, 1)
+
+    # generate Project.xml file (for Dash feed), using tags for versions list
+    @version_tags = Array.new
+    g = Git.open('.')
+    g.tags.each do |obj|
+      unless obj.name =~ /^[v]?\d{1,}.\d+.\d+$/
+        next
+      end
+      @version_tags << obj.name.sub("v","")
+    end
+    # sort in desc order
+    @version_tags.sort! do |a, b|
+      b.sub(".", "").to_i <=> a.sub(".", "").to_i
+    end
+
+    builder = Nokogiri::XML::Builder.new do |xml|
+      xml.entry {
+        xml.version "#{version}"
+        xml.url "http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/#{file_tgz}"
+        xml.send(:"other-versions") {
+          @version_tags.each do |vt|
+            xml.version {
+              xml.name "#{vt}"
+            }
+          end
+        }
+      }
+    end
+    File.open("Docs/API/publish/#{docset_name}.xml", 'w') { |f| f.write(builder.to_xml) }
+  end
+
   desc "Check that documentation can be built from the source code via appledoc successfully."
   task :check => 'appledoc:check' do
-    command = apple_doc_command << " --no-create-html --verbose 5 `find Code/ -name '*.h'`"
+    command = apple_doc_command << " --no-create-html --verbose 5 `find ./Code -name '*.h'`"
     exitstatus = run(command, 1)
     if exitstatus == 0
       puts "appledoc generation completed successfully!"
@@ -117,12 +169,12 @@ namespace :docs do
 
   desc "Generate & install a docset into Xcode from the current sources"
   task :install => 'appledoc:check' do
-    command = apple_doc_command << " --install-docset `find Code/ -name '*.h'`"
+    command = apple_doc_command << " --install-docset `find ./Code -name '*.h'`"
     run(command, 1)
   end
 
   desc "Build and publish the documentation set to the remote server (using rsync over SSH)"
-  task :publish, :version, :destination, :publish_feed do |t, args|
+  task :publish, [:version, :destination, :publish_feed] do |t, args|
     args.with_defaults(:version => File.read("VERSION").chomp, :destination => "restkit.org:/var/www/public/restkit.org/public/api/", :publish_feed => 'true')
     version = args[:version]
     destination = args[:destination]
@@ -131,7 +183,7 @@ namespace :docs do
             " --keep-intermediate-files" <<
             " --docset-feed-name \"RestKit #{version} Documentation\"" <<
             " --docset-feed-url http://restkit.org/api/%DOCSETATOMFILENAME" <<
-            " --docset-package-url http://restkit.org/api/%DOCSETPACKAGEFILENAME --publish-docset --verbose 3 `find Code/ -name '*.h'`"
+            " --docset-package-url http://restkit.org/api/%DOCSETPACKAGEFILENAME --publish-docset --verbose 3 `find ./Code -name '*.h'`"
     run(command, 1)
     puts "Uploading docset to #{destination}..."
     versioned_destination = File.join(destination, version)
