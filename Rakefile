@@ -43,10 +43,22 @@ def restkit_version
   @restkit_version ||= ENV['VERSION'] || File.read("VERSION").chomp
 end
 
+# appledoc returns the following exit status:
+#
+# 0 for success
+# 1 if a warning was logged
+# 2 if error was logged (not really used currently)
+# 3 if fatal was logged (not really used currently)
+# 250 on crash
+#
+# If a single warning is logged, exit status will be non-zero. To override and
+# force an exit status of non-zero for errors only set:
+#   --exit-threshold 2
+#
 def apple_doc_command
   "/usr/local/bin/appledoc -o Docs/API -p RestKit -v #{restkit_version} -c \"RestKit\" " +
   "--company-id org.restkit --warn-undocumented-object --warn-undocumented-member  --warn-empty-description  --warn-unknown-directive " +
-  "--warn-invalid-crossref --warn-missing-arg --no-repeat-first-par "
+  "--warn-invalid-crossref --warn-missing-arg --no-repeat-first-par --exit-threshold 2 "
 end
 
 def run(command, min_exit_status = 0)
