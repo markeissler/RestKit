@@ -5,6 +5,7 @@ require 'xctasks/test_task'
 require 'rakeup'
 require 'nokogiri'
 require 'git'
+require 'fileutils'
 
 RakeUp::ServerTask.new do |t|
   t.port = 4567
@@ -119,6 +120,14 @@ namespace :docs do
     file_tgz = "#{docset_name}.tgz"
     command = "COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -cvzf Docs/API/publish/#{file_tgz} -C Docs/API/docset ."
     run(command, 1)
+
+    # copy Dash file into versions directory as well
+    pwdname = FileUtils.pwd()
+    dirname = "#{pwdname}/Docs/API/publish/versions/#{version}"
+    unless File.directory?(dirname)
+      FileUtils.mkdir_p(dirname)
+    end
+    FileUtils.cp("Docs/API/publish/#{file_tgz}", "#{dirname}/#{file_tgz}", {})
 
     # generate Project.xml file (for Dash feed), using tags for versions list
     @version_tags = Array.new
