@@ -102,7 +102,7 @@ namespace :docs do
   end
 
   desc "Generate a docset from the current sources (but don't install)"
-  task :generate_docset, [:docset_name, :version] => ['appledoc:check'] do |t, args|
+  task :generate_docset_feeds, [:docset_name, :version] => ['appledoc:check'] do |t, args|
     args.with_defaults(:docset_name => "RestKit", :version => File.read("VERSION").chomp)
     docset_name = args[:docset_name]
     version = args[:version]
@@ -114,20 +114,40 @@ namespace :docs do
             " --no-install-docset" <<
             " --docset-feed-name \"RestKit #{version} Documentation\"" <<
             " --docset-feed-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETATOMFILENAME" <<
-            " --docset-package-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETPACKAGEFILENAME --publish-docset --verbose 3 `find ./Code -name '*.h'`"
+            " --docset-package-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETPACKAGEFILENAME" <<
+            " --publish-docset --verbose 3 `find ./Code -name '*.h'`"
     run(command, 1)
+
+    # package for Dash
     puts "Packaging RestKit Dash feed docset for version #{version}..."
+    pwdname = FileUtils.pwd()
+    tempdir = "/tmp/appledoc.tmp"
+
+    # copy source content
+    dash_doc = "#{docset_name}.docset"
+    unless File.directory?(tempdir)
+      FileUtils.mkdir_p(tempdir)
+    end
+    if File.file?("#{tempdir}/#{dash_doc}")
+      FileUtils.rm_f("#{tempdir}/#{dash_doc}")
+    end
+    FileUtils.cp_r("#{pwdname}/Docs/API/docset", "#{tempdir}/#{dash_doc}")
+    # FileUtils.mv("#{tempdir}/docset", "#{tempdir}/#{dash_doc}")
+
+    # generate archive
     file_tgz = "#{docset_name}.tgz"
-    command = "COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -cvzf Docs/API/publish/#{file_tgz} -C Docs/API/docset ."
+    command = "COPYFILE_DISABLE=1 tar --exclude='.DS_Store' -cvzf Docs/API/publish/#{file_tgz} -C #{tempdir} #{dash_doc}"
     run(command, 1)
 
     # copy Dash file into versions directory as well
-    pwdname = FileUtils.pwd()
-    dirname = "#{pwdname}/Docs/API/publish/versions/#{version}"
-    unless File.directory?(dirname)
-      FileUtils.mkdir_p(dirname)
+    versdir = "#{pwdname}/Docs/API/publish/versions/#{version}"
+    unless File.directory?(versdir)
+      FileUtils.mkdir_p(versdir)
     end
-    FileUtils.cp("Docs/API/publish/#{file_tgz}", "#{dirname}/#{file_tgz}", {})
+    FileUtils.cp("#{pwdname}/Docs/API/publish/#{file_tgz}", "#{versdir}/#{file_tgz}", {})
+
+    # cleanup tempdir
+    FileUtils.rm_rf(tempdir)
 
     # generate Project.xml file (for Dash feed), using tags for versions list
     @version_tags = Array.new
