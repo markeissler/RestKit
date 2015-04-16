@@ -107,14 +107,14 @@ namespace :docs do
     docset_name = args[:docset_name]
     version = args[:version]
     puts "Generating RestKit ATOM feed docset for version #{version}..."
-    # ATOM URL: http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/org.restkit.RestKit.atom
+    # ATOM URL: http://s.cdn.mixtur.net/RestKit/api/org.restkit.RestKit.atom
     command = apple_doc_command <<
             " --keep-intermediate-files" <<
             " --no-create-html" <<
             " --no-install-docset" <<
             " --docset-feed-name \"RestKit #{version} Documentation\"" <<
-            " --docset-feed-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETATOMFILENAME" <<
-            " --docset-package-url http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/%DOCSETPACKAGEFILENAME" <<
+            " --docset-feed-url http://s.cdn.mixtur.net/RestKit/api/%DOCSETATOMFILENAME" <<
+            " --docset-package-url http://s.cdn.mixtur.net/RestKit/api/%DOCSETPACKAGEFILENAME" <<
             " --publish-docset --verbose 3 `find ./Code -name '*.h'`"
     run(command, 1)
 
@@ -166,7 +166,7 @@ namespace :docs do
     builder = Nokogiri::XML::Builder.new do |xml|
       xml.entry {
         xml.version "#{version}"
-        xml.url "http://mix-pub-dist.s3-website-us-west-1.amazonaws.com/RestKit/api/#{file_tgz}"
+        xml.url "http://s.cdn.mixtur.net/RestKit/api/#{file_tgz}"
         xml.send(:"other-versions") {
           @version_tags.each do |vt|
             xml.version {
